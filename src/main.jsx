@@ -30,7 +30,7 @@ const lessonList = [
   'Kiểm tra chương 1',
 ];
 
-function Header({ page, setPage }) {
+function Header({ page, setPage, adminUnlocked }) {
   return <header className="header"><div className="wrap nav">
     <button className="brand" onClick={() => setPage('home')}>PATHTUDUY</button>
     <nav>
@@ -89,6 +89,31 @@ function Lesson() {
 }
 
 
+function AdminLogin({ onSuccess, onBack }) {
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+
+  function handleLogin() {
+    if (password === 'PTD-ADMIN-2026') {
+      sessionStorage.setItem('ptd_admin', '1');
+      onSuccess();
+    } else {
+      setError('Mật khẩu quản trị chưa đúng.');
+    }
+  }
+
+  return <main className="auth"><div className="auth-card">
+    <div className="brand centered">PATHTUDUY</div>
+    <div className="eyebrow">KHU VỰC QUẢN TRỊ</div>
+    <h1>Đăng nhập quản trị</h1>
+    <p>Chỉ tài khoản quản trị mới được truy cập khu vực này.</p>
+    <input autoFocus value={password} onChange={e=>{setPassword(e.target.value);setError('')}} placeholder="Mật khẩu quản trị" type="password" onKeyDown={e=>e.key==='Enter' && handleLogin()} />
+    {error && <div className="success" style={{color:'#b42318',background:'#fef3f2',borderColor:'#fecdca'}}>{error}</div>}
+    <button className="primary full" onClick={handleLogin}>Vào quản trị</button>
+    <button className="ghost full" onClick={onBack}>Quay lại website</button>
+  </div></main>;
+}
+
 function AdminHome({ setPage }) {
   const items = [
     { page: 'adminCourses', title: 'Khóa học', kicker: 'NỘI DUNG', desc: 'Thêm, sửa và quản lý khóa học.' },
@@ -140,8 +165,29 @@ function Footer() { return <footer><div className="wrap footer-grid"><div><div c
 
 function App() {
   const [page, setPage] = useState('home');
-  const content = page === 'home' ? <Home setPage={setPage} /> : page === 'courses' ? <Courses setPage={setPage} /> : page === 'courseDetail' ? <CourseDetail setPage={setPage} /> : page === 'docs' ? <Docs /> : page === 'exams' ? <Exams /> : page === 'lesson' ? <Lesson /> : page === 'admin' ? <AdminHome setPage={setPage} /> : page === 'adminCourses' ? <AdminCourses /> : page === 'adminLessons' ? <AdminLessons /> : page === 'adminDocs' ? <AdminDocs /> : page === 'adminCodes' ? <AdminCodes /> : <Login setPage={setPage} />;
-  return <><Header page={page} setPage={setPage} />{content}<Footer /></>;
+  const [adminUnlocked, setAdminUnlocked] = useState(() => sessionStorage.getItem('ptd_admin') === '1');
+
+  function goAdmin() {
+    setPage(adminUnlocked ? 'admin' : 'adminLogin');
+  }
+
+  let content;
+  if (page === 'home') content = <Home setPage={setPage} />;
+  else if (page === 'courses') content = <Courses setPage={setPage} />;
+  else if (page === 'courseDetail') content = <CourseDetail setPage={setPage} />;
+  else if (page === 'docs') content = <Docs />;
+  else if (page === 'exams') content = <Exams />;
+  else if (page === 'lesson') content = <Lesson />;
+  else if (page === 'adminLogin') content = <AdminLogin onSuccess={() => { setAdminUnlocked(true); setPage('admin'); }} onBack={() => setPage('home')} />;
+  else if (page.startsWith('admin') && !adminUnlocked) content = <AdminLogin onSuccess={() => { setAdminUnlocked(true); setPage('admin'); }} onBack={() => setPage('home')} />;
+  else if (page === 'admin') content = <AdminHome setPage={setPage} />;
+  else if (page === 'adminCourses') content = <AdminCourses />;
+  else if (page === 'adminLessons') content = <AdminLessons />;
+  else if (page === 'adminDocs') content = <AdminDocs />;
+  else if (page === 'adminCodes') content = <AdminCodes />;
+  else content = <Login setPage={setPage} />;
+
+  return <><Header page={page} setPage={(next) => next === 'admin' ? goAdmin() : setPage(next)} adminUnlocked={adminUnlocked} />{content}<Footer /></>;
 }
 
 createRoot(document.getElementById('root')).render(<App />);
