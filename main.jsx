@@ -1,76 +1,268 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
+import { createClient } from '@supabase/supabase-js';
 import './styles.css';
 
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
+);
+
 const courses = [
-  { id: 1, title: 'Toán học 11 – Xuất phát sớm', teacher: 'PATHTUDUY', tag: '2K10', desc: 'Kiến thức trọng tâm, chuyên đề và bài tập bám chương trình lớp 11.', lessons: 42, color: 'blue' },
-  { id: 2, title: 'Vật lí 11 – Nắm chắc bản chất', teacher: 'PATHTUDUY', tag: '2K10', desc: 'Bài giảng, ví dụ và luyện tập Vật lí 11 theo từng chuyên đề.', lessons: 36, color: 'purple' },
-  { id: 3, title: 'Tiếng Anh – Grammar & Reading', teacher: 'PATHTUDUY', tag: 'THPT', desc: 'Ngữ pháp trọng tâm và bài đọc luyện tập theo chuyên đề.', lessons: 28, color: 'green' },
-  { id: 4, title: 'Thống kê ứng dụng trong giáo dục', teacher: 'PATHTUDUY', tag: 'ĐẠI HỌC', desc: 'Bài giảng, ví dụ và bài tập thực hành thống kê ứng dụng.', lessons: 18, color: 'orange' }
+  { id: 1, title: 'Toán học 11 – Xuất phát sớm', teacher: 'Tổ Toán học', tag: '2K10', desc: 'Hệ thống bài giảng, chuyên đề và bài tập theo chương trình lớp 11.', lessons: 42, chapters: 5 },
+  { id: 2, title: 'Vật lí 11 – Nắm chắc bản chất', teacher: 'Bộ môn Vật lí', tag: '2K10', desc: 'Học theo chuyên đề, video bài giảng và luyện tập Vật lí 11.', lessons: 36, chapters: 4 },
+  { id: 3, title: 'Tiếng Anh – Grammar & Reading', teacher: 'Bộ môn Tiếng Anh', tag: 'THPT', desc: 'Ngữ pháp trọng tâm và bài đọc luyện tập theo chuyên đề.', lessons: 28, chapters: 6 },
+  { id: 4, title: 'Thống kê ứng dụng trong giáo dục', teacher: 'PATHTUDUY', tag: 'ĐẠI HỌC', desc: 'Bài giảng, ví dụ và bài tập thực hành thống kê.', lessons: 18, chapters: 3 },
 ];
 
 const docs = [
-  ['Đề luyện tập Toán 11 – Chương 1', 'Toán', 'PDF', '12 trang'],
-  ['Phiếu bài tập Vật lí – Dao động', 'Vật lí', 'PDF', '8 trang'],
-  ['Grammar checklist – Unit 1', 'Tiếng Anh', 'PDF', '6 trang'],
-  ['Tóm tắt Thống kê giáo dục – Chương 1', 'Đại học', 'DOCX', '4 trang']
+  { title: 'Đề luyện tập Toán 11 – Chương 1', subject: 'Toán', type: 'PDF', meta: '12 trang' },
+  { title: 'Phiếu bài tập Vật lí – Dao động', subject: 'Vật lí', type: 'PDF', meta: '8 trang' },
+  { title: 'Grammar checklist – Unit 1', subject: 'Tiếng Anh', type: 'PDF', meta: '6 trang' },
+  { title: 'Tóm tắt Thống kê giáo dục – Chương 1', subject: 'Đại học', type: 'DOCX', meta: '4 trang' },
 ];
 
 const exams = [
-  ['Đề kiểm tra Toán – Chương 1', 'Toán', '45 phút', '20 câu'],
-  ['Kiểm tra Vật lí – Dao động', 'Vật lí', '50 phút', '25 câu'],
-  ['English Grammar Test 01', 'Tiếng Anh', '30 phút', '40 câu']
+  { title: 'Đề kiểm tra Toán – Chương 1', subject: 'Toán', time: '45 phút', questions: '20 câu' },
+  { title: 'Kiểm tra Vật lí – Dao động', subject: 'Vật lí', time: '50 phút', questions: '25 câu' },
+  { title: 'English Grammar Test 01', subject: 'Tiếng Anh', time: '30 phút', questions: '40 câu' },
 ];
 
-function Header({ page, setPage }) {
-  const nav = [
-    ['home', 'Trang chủ'], ['courses', 'Khóa học'], ['docs', 'Tài liệu'], ['exams', 'Thi Online']
-  ];
-  return <header className="header"><div className="nav-wrap">
+const lessonList = [
+  'Khái niệm và các dạng bài cơ bản',
+  'Dạng bài 1 – Phương pháp giải',
+  'Dạng bài 2 – Bài tập vận dụng',
+  'Bài tập tổng hợp',
+  'Kiểm tra chương 1',
+];
+
+function Header({ page, setPage, adminUnlocked }) {
+  return <header className="header"><div className="wrap nav">
     <button className="brand" onClick={() => setPage('home')}>PATHTUDUY</button>
-    <nav>{nav.map(([id, label]) => <button key={id} className={page === id ? 'nav-item active' : 'nav-item'} onClick={() => setPage(id)}>{label}</button>)}</nav>
-    <div className="nav-right"><div className="search"><span>⌕</span><input placeholder="Tìm kiếm..." /></div><button className="login-btn" onClick={() => setPage('login')}>Đăng nhập</button></div>
-  </div></header>
+    <nav>
+      <button className={page === 'home' ? 'active' : ''} onClick={() => setPage('home')}>Trang chủ</button>
+      <button className={page === 'courses' ? 'active' : ''} onClick={() => setPage('courses')}>Khóa học</button>
+      <button className={page === 'docs' ? 'active' : ''} onClick={() => setPage('docs')}>Tài liệu</button>
+      <button className={page === 'exams' ? 'active' : ''} onClick={() => setPage('exams')}>Thi Online</button>
+      <button className={page.startsWith('admin') ? 'active' : ''} onClick={() => setPage('admin')}>Quản trị</button>
+    </nav>
+    <div className="nav-right"><div className="search"><span>⌕</span><input placeholder="Tìm kiếm..." /></div><button className="login" onClick={() => setPage('login')}>Đăng nhập</button></div>
+  </div></header>;
 }
 
 function Hero({ setPage }) {
   return <section className="hero wrap"><div className="hero-copy">
-    <div className="eyebrow">NỀN TẢNG HỌC TẬP PATHTUDUY</div>
-    <h1>Học đúng trọng tâm.<br/><span>Tiến bộ từng ngày.</span></h1>
+    <div className="eyebrow">NỀN TẢNG HỌC TẬP CÁ NHÂN</div>
+    <h1>Học đúng trọng tâm.<br /><span>Tiến bộ từng ngày.</span></h1>
     <p>Khóa học, bài giảng, tài liệu và đề thi được sắp xếp thành một hệ thống học tập của riêng bạn.</p>
-    <div className="hero-actions"><button className="primary" onClick={() => setPage('courses')}>Khám phá khóa học</button><button className="secondary" onClick={() => setPage('docs')}>Xem tài liệu</button></div>
-  </div><div className="progress-card"><div className="card-label">TIẾN ĐỘ HỌC TẬP</div><div className="progress-num">68%</div><div className="progress"><span style={{width:'68%'}}/></div><div className="muted">12 / 18 bài đã hoàn thành</div><div className="stats"><div><b>04</b><span>Khóa học</span></div><div><b>36</b><span>Tài liệu</span></div><div><b>12</b><span>Đề thi</span></div></div></div></section>
+    <div className="hero-btns"><button className="primary" onClick={() => setPage('courses')}>Khám phá khóa học</button><button className="ghost" onClick={() => setPage('docs')}>Xem tài liệu</button></div>
+  </div><div className="hero-card"><div className="mini-label">TIẾN ĐỘ HỌC TẬP</div><div className="big-number">68%</div><div className="progress"><i style={{ width: '68%' }} /></div><div className="muted">12 / 18 bài đã hoàn thành</div><div className="stats"><div><b>04</b><span>Khóa học</span></div><div><b>36</b><span>Tài liệu</span></div><div><b>12</b><span>Đề thi</span></div></div></div></section>;
 }
 
-function CourseCard({ course, onClick }) {
-  return <article className="course-card" onClick={onClick}><div className={`course-cover ${course.color}`}><span>{course.tag}</span><strong>{course.title.split(' – ')[0]}</strong></div><div className="course-body"><div className="kicker">{course.teacher}</div><h3>{course.title}</h3><p>{course.desc}</p><div className="course-meta"><span>◷ {course.lessons} bài học</span><button>Xem khóa học →</button></div></div></article>
+function CourseCard({ c, onOpen }) {
+  return <article className="card course"><div className="course-cover"><span>{c.tag}</span><strong>{c.title.split(' – ')[0]}</strong></div><div className="card-body"><div className="kicker">{c.teacher}</div><h3>{c.title}</h3><p>{c.desc}</p><div className="card-meta"><span>{c.chapters} chương · {c.lessons} bài</span><button onClick={onOpen}>Xem khóa học →</button></div></div></article>;
 }
 
 function Home({ setPage }) {
-  return <><Hero setPage={setPage}/><section className="wrap section"><div className="section-head"><div><div className="eyebrow">ĐƯỢC QUAN TÂM</div><h2>Khóa học nổi bật</h2></div><button className="text-btn" onClick={() => setPage('courses')}>Xem tất cả →</button></div><div className="grid4">{courses.map(c => <CourseCard key={c.id} course={c} onClick={() => setPage(`course-${c.id}`)} />)}</div></section><section className="feature"><div className="wrap feature-grid"><div><div className="eyebrow">HỆ THỐNG HỌC TẬP</div><h2>Một nơi để học, luyện tập và kiểm tra.</h2><p>Từ khóa học đến tài liệu và đề thi, tất cả đều nằm trong một hệ thống.</p></div><div className="feature-list"><div><b>01</b><span><strong>Khóa học</strong><small>Chương → bài học → tài liệu</small></span></div><div><b>02</b><span><strong>Tài liệu</strong><small>Kho đề và tài liệu theo môn</small></span></div><div><b>03</b><span><strong>Thi Online</strong><small>Làm bài và xem kết quả</small></span></div></div></div></section></>
+  return <><Hero setPage={setPage} /><section className="wrap section"><div className="section-head"><div><div className="eyebrow">ĐƯỢC QUAN TÂM</div><h2>Khóa học nổi bật</h2></div><button className="text-btn" onClick={() => setPage('courses')}>Xem tất cả →</button></div><div className="grid courses-grid">{courses.map(c => <CourseCard key={c.id} c={c} onOpen={() => setPage('courseDetail')} />)}</div></section><section className="feature-band"><div className="wrap feature-grid"><div><div className="eyebrow">MỘT HỆ THỐNG – NHIỀU CÁCH HỌC</div><h2>Tất cả tài nguyên học tập ở một nơi.</h2></div><div className="feature-list"><div>✓ Bài học theo chương</div><div>✓ Tài liệu tải xuống</div><div>✓ Đề thi online</div><div>✓ Theo dõi tiến độ</div></div></div></section></>;
 }
 
 function Courses({ setPage }) {
-  return <main className="wrap page"><div className="page-title"><div><div className="eyebrow">KHÓA HỌC</div><h1>Khóa học của PATHTUDUY</h1><p>Chọn môn học và bắt đầu từ bài học đầu tiên.</p></div><button className="secondary">Bộ lọc ▾</button></div><div className="grid2">{courses.map(c => <CourseCard key={c.id} course={c} onClick={() => setPage(`course-${c.id}`)}/>)}</div></main>
+  const [filter, setFilter] = useState('Tất cả');
+  const filtered = filter === 'Tất cả' ? courses : courses.filter(c => c.tag === filter);
+  return <main className="wrap page"><div className="page-title"><div><div className="eyebrow">KHO HỌC</div><h1>Tất cả khóa học</h1><p className="page-sub">Chọn khóa học để xem chương, bài giảng và tài liệu.</p></div><div className="filters">{['Tất cả', '2K10', 'THPT', 'ĐẠI HỌC'].map(x => <button key={x} className={'filter ' + (filter === x ? 'active' : '')} onClick={() => setFilter(x)}>{x}</button>)}</div></div><div className="grid courses-grid">{filtered.map(c => <CourseCard key={c.id} c={c} onOpen={() => setPage('courseDetail')} />)}</div></main>;
 }
 
-function CourseDetail({ id, setPage }) {
-  const c = courses.find(x => x.id === id) || courses[0];
-  return <main className="wrap page"><button className="back" onClick={() => setPage('courses')}>← Quay lại khóa học</button><div className="detail-head"><div className={`detail-cover ${c.color}`}><span>{c.tag}</span><strong>{c.title}</strong></div><div><div className="eyebrow">{c.teacher}</div><h1>{c.title}</h1><p>{c.desc}</p><button className="primary" onClick={() => setPage('lesson')}>Học bài đầu tiên</button></div></div><div className="lesson-layout"><div><div className="chapter"><div><b>Chương 1</b><span>12 bài học</span></div><span>⌃</span></div>{['Giới thiệu chuyên đề','Bài giảng trọng tâm','Ví dụ minh họa','Bài tập luyện tập','Kiểm tra chương'].map((x,i)=><button key={x} className="lesson-row" onClick={() => setPage('lesson')}><span className="lesson-num">{String(i+1).padStart(2,'0')}</span><span>{x}</span><span>{i===0?'▶':'🔒'}</span></button>)}</div><aside className="side-card"><div className="card-label">THÔNG TIN KHÓA HỌC</div><b>{c.lessons} bài học</b><span>Tiến độ 68%</span><div className="progress"><span style={{width:'68%'}}/></div><button className="primary full" onClick={() => setPage('lesson')}>Tiếp tục học</button></aside></div></main>
+function CourseDetail({ setPage }) {
+  return <main className="wrap page detail-page"><div className="course-detail-head"><div><div className="eyebrow">KHÓA HỌC · 2K10</div><h1>Toán học 11 – Xuất phát sớm</h1><p>Hệ thống bài giảng, chuyên đề, tài liệu và bài tập theo chương.</p></div><button className="primary" onClick={() => setPage('lesson')}>Vào học</button></div><div className="chapter-list">{[1, 2, 3, 4, 5].map((n) => <div className="chapter" key={n}><div className="chapter-head"><b>Chương {n}</b><span>{n === 1 ? '12' : '8'} bài</span></div>{n === 1 && lessonList.slice(0, 4).map((x, i) => <button className="chapter-lesson" key={x} onClick={() => setPage('lesson')}><span>{String(i + 1).padStart(2, '0')}</span>{x}<em>›</em></button>)}</div>)}</div></main>;
 }
 
-function Lesson({ setPage }) {
-  const [locked,setLocked]=useState(true); const [code,setCode]=useState(''); const [msg,setMsg]=useState('');
-  const unlock=()=>{if(code==='2026'){setLocked(false);setMsg('Mở bài thành công.')}else setMsg('Mã chưa đúng. Hãy thử lại.');};
-  return <main className="wrap page"><button className="back" onClick={() => setPage('courses')}>← Quay lại</button><div className="lesson-page"><div className="lesson-main"><div className="video"><div className="play">▶</div><span>VIDEO BÀI GIẢNG</span></div><div className="lesson-top"><div><div className="eyebrow">TOÁN HỌC 11</div><h1>Giới thiệu chuyên đề</h1></div><span className="pill">Bài 01</span></div>{locked?<div className="lock-box"><div className="lock-icon">🔒</div><h2>Nội dung được bảo vệ</h2><p>Nhập mã truy cập để mở bài học này.</p><input value={code} onChange={e=>setCode(e.target.value)} placeholder="Nhập mã truy cập"/><button className="primary" onClick={unlock}>Mở bài</button>{msg&&<small className={locked?'error':'success'}>{msg}</small>}</div>:<div className="content-box"><h2>Nội dung bài học</h2><p>Đây là khu vực nội dung của bài học. Bạn có thể đặt video, tài liệu PDF, ghi chú và bài tập ở đây.</p><div className="resource"><span>📄</span><div><b>Tài liệu bài học 01.pdf</b><small>PDF · 12 trang</small></div><button>Tải xuống</button></div></div>}</div><aside className="playlist"><div className="card-label">NỘI DUNG KHÓA HỌC</div>{['Giới thiệu chuyên đề','Bài giảng trọng tâm','Ví dụ minh họa','Bài tập luyện tập','Kiểm tra chương'].map((x,i)=><button key={x} className={i===0?'playlist-row current':'playlist-row'}><span>{String(i+1).padStart(2,'0')}</span>{x}<em>{i===0?'▶':'🔒'}</em></button>)}</aside></div></main>
+function Docs() {
+  const [q, setQ] = useState('');
+  const filtered = useMemo(() => docs.filter(d => d.title.toLowerCase().includes(q.toLowerCase())), [q]);
+  return <main className="wrap page"><div className="page-title"><div><div className="eyebrow">KHO TÀI LIỆU</div><h1>Tài liệu học tập</h1></div><div className="doc-search">⌕ <input value={q} onChange={e => setQ(e.target.value)} placeholder="Tìm tài liệu..." /></div></div><div className="doc-list">{filtered.map(d => <div className="doc-row" key={d.title}><div className="doc-icon">{d.type}</div><div className="doc-main"><h3>{d.title}</h3><span>{d.subject} · {d.meta}</span></div><button className="outline">Xem tài liệu</button></div>)}</div></main>;
 }
 
-function Docs(){return <main className="wrap page"><div className="page-title"><div><div className="eyebrow">KHO TÀI LIỆU</div><h1>Tài liệu</h1><p>Tìm kiếm tài liệu học tập theo môn học.</p></div></div><div className="toolbar"><div className="search big"><span>⌕</span><input placeholder="Tìm tài liệu..."/></div><button className="secondary">Môn học ▾</button><button className="secondary">Loại file ▾</button></div><div className="table-card">{docs.map((d,i)=><div className="doc-row" key={i}><div className="doc-icon">{d[2]==='PDF'?'PDF':'DOC'}</div><div className="doc-info"><b>{d[0]}</b><span>{d[1]} · {d[3]}</span></div><span className="doc-type">{d[2]}</span><button className="text-btn">Xem →</button></div>)}</div></main>}
+function Exams() {
+  return <main className="wrap page"><div className="page-title"><div><div className="eyebrow">LUYỆN THI</div><h1>Thi Online</h1></div><div className="filters"><button className="filter active">Tất cả</button><button className="filter">Toán</button><button className="filter">Vật lí</button><button className="filter">Tiếng Anh</button></div></div><div className="exam-list">{exams.map((e, i) => <div className="exam-row" key={e.title}><div className="exam-num">0{i + 1}</div><div className="doc-main"><h3>{e.title}</h3><span>{e.subject} · {e.questions} · {e.time}</span></div><button className="primary small">Vào thi</button></div>)}</div></main>;
+}
 
-function Exams(){return <main className="wrap page"><div className="page-title"><div><div className="eyebrow">THI ONLINE</div><h1>Đề thi & kiểm tra</h1><p>Luyện tập theo môn, thời lượng và số câu.</p></div></div><div className="toolbar"><div className="search big"><span>⌕</span><input placeholder="Tìm đề thi..."/></div><button className="secondary">Môn học ▾</button><button className="secondary">Thời lượng ▾</button></div><div className="table-card">{exams.map((e,i)=><div className="exam-row" key={i}><div><div className="kicker">{e[1]}</div><b>{e[0]}</b><span>{e[2]} · {e[3]}</span></div><button className="primary small">Vào thi</button></div>)}</div></main>}
+function Lesson() {
+  const [locked, setLocked] = useState(true);
+  const [code, setCode] = useState('');
+  const unlock = () => { if (code === '2026') setLocked(false); else alert('Mã demo chưa đúng. Hãy nhập 2026.'); };
+  return <main className="wrap page lesson-page"><div className="lesson-grid"><article><div className="video-placeholder"><div className="play">▶</div><span>VIDEO BÀI GIẢNG</span></div><div className="lesson-kicker">TOÁN HỌC 11 · CHƯƠNG 1 · BÀI 01</div><h1>{lessonList[0]}</h1>{locked ? <div className="lock-box"><div className="lock">🔐</div><h2>Nội dung được bảo vệ</h2><p>Nhập mã truy cập để mở bài học.</p><div className="code-line"><input value={code} onChange={e => setCode(e.target.value)} placeholder="Nhập mã truy cập" /><button className="primary" onClick={unlock}>Mở bài</button></div><small>Demo: mã <b>2026</b></small></div> : <div className="lesson-content"><div className="success">✓ Bài học đã được mở</div><h2>Nội dung bài học</h2><p>Đây là khu vực bạn có thể đặt video, nội dung HTML, PDF và bài tập.</p><div className="resource"><span>📄</span><div><b>Tài liệu bài 01.pdf</b><small>8 trang · 2.4 MB</small></div><button className="outline">Mở</button></div><div className="resource"><span>📝</span><div><b>Bài tập luyện tập 01</b><small>20 câu · 30 phút</small></div><button className="outline">Làm bài</button></div></div>}</article><aside className="sidebar"><div className="side-title">NỘI DUNG KHÓA HỌC</div>{lessonList.map((x, i) => <div className={'side-item ' + (i === 0 ? 'current' : '')} key={x}><span>{String(i + 1).padStart(2, '0')}</span>{x}</div>)}</aside></div></main>;
+}
 
-function Login(){const [mode,setMode]=useState('login');return <main className="auth-page"><div className="auth-card"><button className="brand auth-brand">PATHTUDUY</button><div className="eyebrow">TÀI KHOẢN</div><h1>{mode==='login'?'Đăng nhập':'Tạo tài khoản'}</h1><p>{mode==='login'?'Tiếp tục học tập trên PATHTUDUY.':'Tạo tài khoản để lưu tiến độ học tập.'}</p><input placeholder="Email"/><input placeholder="Mật khẩu" type="password"/><button className="primary full">{mode==='login'?'Đăng nhập':'Đăng ký'}</button><button className="switch" onClick={()=>setMode(mode==='login'?'register':'login')}>{mode==='login'?'Chưa có tài khoản? Đăng ký':'Đã có tài khoản? Đăng nhập'}</button></div></main>}
 
-function App(){const [page,setPage]=useState('home'); const content=useMemo(()=>{if(page==='home')return <Home setPage={setPage}/>; if(page==='courses')return <Courses setPage={setPage}/>; if(page==='docs')return <Docs/>; if(page==='exams')return <Exams/>; if(page==='login')return <Login/>; if(page==='lesson')return <Lesson setPage={setPage}/>; if(page.startsWith('course-')) return <CourseDetail id={Number(page.split('-')[1])} setPage={setPage}/>; return <Home setPage={setPage}/>},[page]); return <><Header page={page} setPage={setPage}/>{content}<footer><div className="wrap footer-in"><b>PATHTUDUY</b><span>© 2026 PATHTUDUY. Hệ thống học tập cá nhân.</span></div></footer></>}
+function AdminLogin({ onSuccess, onBack }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-createRoot(document.getElementById('root')).render(<App/>);
+  async function handleLogin() {
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail || !password) {
+      setError('Vui lòng nhập email và mật khẩu.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    const { data, error: signInError } = await supabase.auth.signInWithPassword({
+      email: normalizedEmail,
+      password
+    });
+    if (signInError || !data.user) {
+      setLoading(false);
+      setError(signInError?.message === 'Invalid login credentials' ? 'Email hoặc mật khẩu chưa đúng.' : 'Không thể đăng nhập. Vui lòng thử lại.');
+      return;
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', data.user.id)
+      .single();
+
+    setLoading(false);
+    if (profileError || profile?.role !== 'admin') {
+      await supabase.auth.signOut();
+      setError('Tài khoản này không có quyền quản trị.');
+      return;
+    }
+
+    sessionStorage.setItem('ptd_admin', '1');
+    onSuccess();
+  }
+
+  return <main className="auth"><div className="auth-card">
+    <div className="brand centered">PATHTUDUY</div>
+    <div className="eyebrow">KHU VỰC QUẢN TRỊ</div>
+    <h1>Đăng nhập quản trị</h1>
+    <p>Chỉ tài khoản có quyền <b>admin</b> mới được truy cập khu vực này.</p>
+    <input autoFocus value={email} onChange={e=>{setEmail(e.target.value);setError('')}} placeholder="Email quản trị" type="email" onKeyDown={e=>e.key==='Enter' && handleLogin()} />
+    <input value={password} onChange={e=>{setPassword(e.target.value);setError('')}} placeholder="Mật khẩu" type="password" onKeyDown={e=>e.key==='Enter' && handleLogin()} />
+    {error && <div className="success" style={{color:'#b42318',background:'#fef3f2',borderColor:'#fecdca'}}>{error}</div>}
+    <button className="primary full" onClick={handleLogin} disabled={loading}>{loading ? 'Đang đăng nhập...' : 'Vào quản trị'}</button>
+    <button className="ghost full" onClick={onBack}>Quay lại website</button>
+  </div></main>;
+}
+
+function AdminHome({ setPage }) {
+  const items = [
+    { page: 'adminCourses', title: 'Khóa học', kicker: 'NỘI DUNG', desc: 'Thêm, sửa và quản lý khóa học.' },
+    { page: 'adminLessons', title: 'Bài học', kicker: 'BÀI HỌC', desc: 'Quản lý chương, bài và nội dung.' },
+    { page: 'adminDocs', title: 'Tài liệu', kicker: 'TÀI LIỆU', desc: 'Quản lý PDF và tài liệu học tập.' },
+    { page: 'adminCodes', title: 'Mã truy cập', kicker: 'BẢO MẬT', desc: 'Tạo và quản lý mã mở khóa bài học.' },
+  ];
+  return <main className="wrap page">
+    <div className="page-title"><div><div className="eyebrow">QUẢN TRỊ PATHTUDUY</div><h1>Bảng điều khiển</h1><p className="page-sub">Khu vực quản lý nội dung website.</p></div></div>
+    <div className="grid courses-grid">{items.map(item => <div className="card" key={item.page}><div className="card-body"><div className="kicker">{item.kicker}</div><h3>{item.title}</h3><p>{item.desc}</p><button className="primary" onClick={() => setPage(item.page)}>Quản lý</button></div></div>)}</div>
+  </main>;
+}
+
+function AdminCourses() {
+  const [items, setItems] = useState(courses.map(c => ({...c})));
+  const [title, setTitle] = useState('');
+  const add = () => { const t=title.trim(); if(!t) return; setItems(prev => [...prev,{id:Date.now(),title:t,teacher:'PATHTUDUY',tag:'THPT',desc:'Khóa học mới.',lessons:0,chapters:0}]); setTitle(''); };
+  return <main className="wrap page">
+    <div className="page-title"><div><div className="eyebrow">QUẢN TRỊ · KHÓA HỌC</div><h1>Quản lý khóa học</h1><p className="page-sub">Tạo và chỉnh sửa danh sách khóa học ngay trên trình duyệt.</p></div></div>
+    <div className="card admin-form"><div className="card-body"><h3>Thêm khóa học</h3><div className="code-line"><input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Tên khóa học mới"/><button className="primary" onClick={add}>Thêm</button></div></div></div>
+    <div className="admin-table">{items.map(c => <div className="admin-row" key={c.id}><div><b>{c.title}</b><span>{c.teacher} · {c.tag}</span></div><button className="outline" onClick={()=>alert('Bản 1.0: chức năng sửa sẽ được kết nối ở bước database.')}>Sửa</button></div>)}</div>
+  </main>;
+}
+
+function AdminLessons() {
+  const [items,setItems]=useState(lessonList.slice(0,4));
+  const [title,setTitle]=useState('');
+  const add=()=>{const t=title.trim();if(!t)return;setItems(p=>[...p,t]);setTitle('');};
+  return <main className="wrap page"><div className="page-title"><div><div className="eyebrow">QUẢN TRỊ · BÀI HỌC</div><h1>Quản lý bài học</h1><p className="page-sub">Thêm bài học vào Chương 1.</p></div></div><div className="card admin-form"><div className="card-body"><h3>Thêm bài học</h3><div className="code-line"><input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Tên bài học mới"/><button className="primary" onClick={add}>Thêm</button></div></div></div><div className="admin-table">{items.map((x,i)=><div className="admin-row" key={x}><div><b>{String(i+1).padStart(2,'0')} · {x}</b><span>Toán học 11 · Chương 1</span></div><button className="outline" onClick={()=>alert('Bản 1.0: chức năng chỉnh sửa sẽ kết nối database sau.')}>Sửa</button></div>)}</div></main>;
+}
+
+function AdminDocs() {
+  const [items,setItems]=useState(docs.map(d=>({...d})));
+  const [title,setTitle]=useState('');
+  const add=()=>{const t=title.trim();if(!t)return;setItems(p=>[...p,{title:t,subject:'Chưa phân loại',type:'PDF',meta:'Chưa có file'}]);setTitle('');};
+  return <main className="wrap page"><div className="page-title"><div><div className="eyebrow">QUẢN TRỊ · TÀI LIỆU</div><h1>Quản lý tài liệu</h1><p className="page-sub">Đây là bước đầu để quản lý danh mục tài liệu.</p></div></div><div className="card admin-form"><div className="card-body"><h3>Thêm tài liệu</h3><div className="code-line"><input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Tên tài liệu"/><button className="primary" onClick={add}>Thêm</button></div><small>Upload file thật sẽ được kết nối sau khi có kho lưu trữ.</small></div></div><div className="admin-table">{items.map(d=><div className="admin-row" key={d.title}><div><b>{d.title}</b><span>{d.subject} · {d.type} · {d.meta}</span></div><button className="outline">Chi tiết</button></div>)}</div></main>;
+}
+
+function AdminCodes() {
+  const [items,setItems]=useState([{id:1,code:'2026',lesson:'Khái niệm và các dạng bài cơ bản',status:'Đang hoạt động'}]);
+  const [code,setCode]=useState('');
+  const add=()=>{const c=code.trim();if(!c)return;setItems(p=>[...p,{id:Date.now(),code:c,lesson:'Bài học mới',status:'Đang hoạt động'}]);setCode('');};
+  return <main className="wrap page"><div className="page-title"><div><div className="eyebrow">QUẢN TRỊ · BẢO MẬT</div><h1>Mã truy cập</h1><p className="page-sub">Tạo mã mở khóa bài học.</p></div></div><div className="card admin-form"><div className="card-body"><h3>Tạo mã mới</h3><div className="code-line"><input value={code} onChange={e=>setCode(e.target.value)} placeholder="Ví dụ: PATH-2026-001"/><button className="primary" onClick={add}>Tạo mã</button></div></div></div><div className="admin-table">{items.map(x=><div className="admin-row" key={x.id}><div><b>{x.code}</b><span>{x.lesson} · {x.status}</span></div><button className="outline" onClick={()=>navigator.clipboard?.writeText(x.code)}>Sao chép</button></div>)}</div></main>;
+}
+
+function Login({ setPage }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  async function handleLogin() {
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail || !password) {
+      setError('Vui lòng nhập email và mật khẩu.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
+    setLoading(false);
+    if (signInError) {
+      setError(signInError.message === 'Invalid login credentials' ? 'Email hoặc mật khẩu chưa đúng.' : 'Không thể đăng nhập. Vui lòng thử lại.');
+      return;
+    }
+    setPage('home');
+  }
+
+  return <main className="auth"><div className="auth-card"><div className="brand centered">PATHTUDUY</div><h1>Đăng nhập</h1><p>Đăng nhập để học tập và theo dõi tiến độ.</p><input value={email} onChange={e=>{setEmail(e.target.value);setError('')}} placeholder="Email" type="email" /><input value={password} onChange={e=>{setPassword(e.target.value);setError('')}} placeholder="Mật khẩu" type="password" /><button className="primary full" onClick={handleLogin} disabled={loading}>{loading ? 'Đang đăng nhập...' : 'Đăng nhập'}</button>{error && <div className="success" style={{color:'#b42318',background:'#fef3f2',borderColor:'#fecdca'}}>{error}</div>}<div className="auth-foot">Chưa có tài khoản? <b>Liên hệ quản trị viên để được cấp tài khoản.</b></div></div></main>;
+}
+
+function Footer() { return <footer><div className="wrap footer-grid"><div><div className="brand">PATHTUDUY</div><p>Nền tảng học tập của riêng bạn.</p></div><div><b>Khám phá</b><span>Khóa học</span><span>Tài liệu</span><span>Thi Online</span></div><div><b>Hỗ trợ</b><span>Điều khoản</span><span>Chính sách</span><span>Liên hệ</span></div></div></footer>; }
+
+function App() {
+  const [page, setPage] = useState('home');
+  const [adminUnlocked, setAdminUnlocked] = useState(() => sessionStorage.getItem('ptd_admin') === '1');
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      if (!data.session) {
+        sessionStorage.removeItem('ptd_admin');
+        setAdminUnlocked(false);
+      }
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || !session) {
+        sessionStorage.removeItem('ptd_admin');
+        setAdminUnlocked(false);
+      }
+    });
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  function goAdmin() {
+    setPage(adminUnlocked ? 'admin' : 'adminLogin');
+  }
+
+  let content;
+  if (page === 'home') content = <Home setPage={setPage} />;
+  else if (page === 'courses') content = <Courses setPage={setPage} />;
+  else if (page === 'courseDetail') content = <CourseDetail setPage={setPage} />;
+  else if (page === 'docs') content = <Docs />;
+  else if (page === 'exams') content = <Exams />;
+  else if (page === 'lesson') content = <Lesson />;
+  else if (page === 'adminLogin') content = <AdminLogin onSuccess={() => { setAdminUnlocked(true); setPage('admin'); }} onBack={() => setPage('home')} />;
+  else if (page.startsWith('admin') && !adminUnlocked) content = <AdminLogin onSuccess={() => { setAdminUnlocked(true); setPage('admin'); }} onBack={() => setPage('home')} />;
+  else if (page === 'admin') content = <AdminHome setPage={setPage} />;
+  else if (page === 'adminCourses') content = <AdminCourses />;
+  else if (page === 'adminLessons') content = <AdminLessons />;
+  else if (page === 'adminDocs') content = <AdminDocs />;
+  else if (page === 'adminCodes') content = <AdminCodes />;
+  else content = <Login setPage={setPage} />;
+
+  return <><Header page={page} setPage={(next) => next === 'admin' ? goAdmin() : setPage(next)} adminUnlocked={adminUnlocked} />{content}<Footer /></>;
+}
+
+createRoot(document.getElementById('root')).render(<App />);
