@@ -8,6 +8,30 @@ const supabase = createClient(
   import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
 );
 
+const VIDEO_BUCKET = 'course-videos';
+const VIDEO_EXTENSIONS = /\.(mp4|webm|mov|m4v|ogg)$/i;
+
+async function getLatestCourseVideo() {
+  const { data, error } = await supabase.storage
+    .from(VIDEO_BUCKET)
+    .list('', {
+      limit: 100,
+      sortBy: { column: 'created_at', order: 'desc' },
+    });
+
+  if (error) throw error;
+
+  const file = (data || []).find((item) => VIDEO_EXTENSIONS.test(item.name || ''));
+  if (!file) return null;
+
+  const { data: signed, error: signedError } = await supabase.storage
+    .from(VIDEO_BUCKET)
+    .createSignedUrl(file.name, 60 * 60);
+
+  if (signedError) throw signedError;
+  return { name: file.name, url: signed.signedUrl };
+}
+
 const courses = [
   { id: 1, title: 'Toán học 11 – Xuất phát sớm', teacher: 'Tổ Toán học', tag: '2K10', desc: 'Hệ thống bài giảng, chuyên đề và bài tập theo chương trình lớp 11.', lessons: 42, chapters: 5 },
   { id: 2, title: 'Vật lí 11 – Nắm chắc bản chất', teacher: 'Bộ môn Vật lí', tag: '2K10', desc: 'Học theo chuyên đề, video bài giảng và luyện tập Vật lí 11.', lessons: 36, chapters: 4 },
@@ -90,8 +114,45 @@ function Exams() {
 function Lesson() {
   const [locked, setLocked] = useState(true);
   const [code, setCode] = useState('');
-  const unlock = () => { if (code === '2026') setLocked(false); else alert('Mã demo chưa đúng. Hãy nhập 2026.'); };
-  return <main className="wrap page lesson-page"><div className="lesson-grid"><article><div className="video-placeholder"><div className="play">▶</div><span>VIDEO BÀI GIẢNG</span></div><div className="lesson-kicker">TOÁN HỌC 11 · CHƯƠNG 1 · BÀI 01</div><h1>{lessonList[0]}</h1>{locked ? <div className="lock-box"><div className="lock">🔐</div><h2>Nội dung được bảo vệ</h2><p>Nhập mã truy cập để mở bài học.</p><div className="code-line"><input value={code} onChange={e => setCode(e.target.value)} placeholder="Nhập mã truy cập" /><button className="primary" onClick={unlock}>Mở bài</button></div><small>Demo: mã <b>2026</b></small></div> : <div className="lesson-content"><div className="success">✓ Bài học đã được mở</div><h2>Nội dung bài học</h2><p>Đây là khu vực bạn có thể đặt video, nội dung HTML, PDF và bài tập.</p><div className="resource"><span>📄</span><div><b>Tài liệu bài 01.pdf</b><small>8 trang · 2.4 MB</small></div><button className="outline">Mở</button></div><div className="resource"><span>📝</span><div><b>Bài tập luyện tập 01</b><small>20 câu · 30 phút</small></div><button className="outline">Làm bài</button></div></div>}</article><aside className="sidebar"><div className="side-title">NỘI DUNG KHÓA HỌC</div>{lessonList.map((x, i) => <div className={'side-item ' + (i === 0 ? 'current' : '')} key={x}><span>{String(i + 1).padStart(2, '0')}</span>{x}</div>)}</aside></div></main>;
+  const [video, setVideo] = useState(null);
+  const [videoError, setVideoError] = useState('');
+  const [videoLoading, setVideoLoading] = useState(false);
+
+  async function loadVideo() {
+    setVideoLoading(true);
+    setVideoError('');
+    try {
+      const latestVideo = await getLatestCourseVideo();
+      setVideo(latestVideo);
+      if (!latestVideo) setVideoError('Chưa có video nào trong kho course-videos.');
+    } catch (error) {
+      setVideoError('Không tải được video. Kiểm tra quyền Storage và đăng nhập.');
+    } finally {
+      setVideoLoading(false);
+    }
+  }
+
+  const unlock = async () => {
+    if (code === '2026') {
+      setLocked(false);
+      await loadVideo();
+    } else {
+      alert('Mã demo chưa đúng. Hãy nhập 2026.');
+    }
+  };
+
+  return <main className="wrap page lesson-page"><div className="lesson-grid"><article>
+    {locked ? <div className="video-placeholder"><div className="play">▶</div><span>VIDEO BÀI GIẢNG</span></div> : (
+      video ? <video controls playsInline preload="metadata" style={{ width: '100%', borderRadius: '22px', display: 'block', background: '#0b1220' }} src={video.url} />
+      : <div className="video-placeholder"><div className="play">▶</div><span>{videoLoading ? 'ĐANG TẢI VIDEO...' : 'CHƯA CÓ VIDEO'}</span></div>
+    )}
+    <div className="lesson-kicker">TOÁN HỌC 11 · CHƯƠNG 1 · BÀI 01</div><h1>{lessonList[0]}</h1>
+    {locked ? <div className="lock-box"><div className="lock">🔐</div><h2>Nội dung được bảo vệ</h2><p>Nhập mã truy cập để mở bài học.</p><div className="code-line"><input value={code} onChange={e => setCode(e.target.value)} placeholder="Nhập mã truy cập" /><button className="primary" onClick={unlock}>Mở bài</button></div><small>Demo: mã <b>2026</b></small></div> : <div className="lesson-content"><div className="success">✓ Bài học đã được mở</div>
+      {videoError && <div className="success" style={{color:'#b42318',background:'#fef3f2',borderColor:'#fecdca'}}>{videoError}</div>}
+      {video && <p style={{marginTop:'12px'}}>Đang phát: <b>{video.name}</b></p>}
+      <h2>Nội dung bài học</h2><p>Video dưới đây được lấy trực tiếp từ Supabase Storage.</p><div className="resource"><span>📄</span><div><b>Tài liệu bài 01.pdf</b><small>8 trang · 2.4 MB</small></div><button className="outline">Mở</button></div><div className="resource"><span>📝</span><div><b>Bài tập luyện tập 01</b><small>20 câu · 30 phút</small></div><button className="outline">Làm bài</button></div></div>}
+    </article><aside className="sidebar"><div className="side-title">NỘI DUNG KHÓA HỌC</div>{lessonList.map((x, i) => <div className={'side-item ' + (i === 0 ? 'current' : '')} key={x}><span>{String(i + 1).padStart(2, '0')}</span>{x}</div>)}</aside>
+  </div></main>;
 }
 
 
@@ -174,10 +235,52 @@ function AdminCourses() {
 }
 
 function AdminLessons() {
-  const [items,setItems]=useState(lessonList.slice(0,4));
-  const [title,setTitle]=useState('');
-  const add=()=>{const t=title.trim();if(!t)return;setItems(p=>[...p,t]);setTitle('');};
-  return <main className="wrap page"><div className="page-title"><div><div className="eyebrow">QUẢN TRỊ · BÀI HỌC</div><h1>Quản lý bài học</h1><p className="page-sub">Thêm bài học vào Chương 1.</p></div></div><div className="card admin-form"><div className="card-body"><h3>Thêm bài học</h3><div className="code-line"><input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Tên bài học mới"/><button className="primary" onClick={add}>Thêm</button></div></div></div><div className="admin-table">{items.map((x,i)=><div className="admin-row" key={x}><div><b>{String(i+1).padStart(2,'0')} · {x}</b><span>Toán học 11 · Chương 1</span></div><button className="outline" onClick={()=>alert('Bản 1.0: chức năng chỉnh sửa sẽ kết nối database sau.')}>Sửa</button></div>)}</div></main>;
+  const [items, setItems] = useState(lessonList.slice(0, 4));
+  const [title, setTitle] = useState('');
+  const [videoFile, setVideoFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState('');
+  const [uploadError, setUploadError] = useState('');
+
+  const add = () => {
+    const t = title.trim();
+    if (!t) return;
+    setItems(p => [...p, t]);
+    setTitle('');
+  };
+
+  async function uploadVideo() {
+    if (!videoFile) {
+      setUploadError('Hãy chọn một video trước.');
+      return;
+    }
+    setUploading(true);
+    setUploadMessage('');
+    setUploadError('');
+    try {
+      const safeName = videoFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const objectPath = `${Date.now()}-${safeName}`;
+      const { error } = await supabase.storage.from(VIDEO_BUCKET).upload(objectPath, videoFile, {
+        upsert: false,
+        contentType: videoFile.type || undefined,
+      });
+      if (error) throw error;
+      setUploadMessage(`Đã tải lên: ${videoFile.name}`);
+      setVideoFile(null);
+      const input = document.getElementById('ptd-video-upload');
+      if (input) input.value = '';
+    } catch (error) {
+      setUploadError(error?.message || 'Upload video thất bại.');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return <main className="wrap page"><div className="page-title"><div><div className="eyebrow">QUẢN TRỊ · BÀI HỌC</div><h1>Quản lý bài học</h1><p className="page-sub">Thêm bài học và tải video trực tiếp lên Supabase Storage.</p></div></div>
+    <div className="card admin-form"><div className="card-body"><h3>Tải video bài học</h3><p style={{marginTop:'-4px'}}>Video được lưu vào bucket <b>{VIDEO_BUCKET}</b>. Chỉ tài khoản Admin mới có quyền upload.</p><div className="code-line"><input id="ptd-video-upload" type="file" accept="video/*" onChange={e=>{setVideoFile(e.target.files?.[0] || null);setUploadError('');setUploadMessage('')}} /><button className="primary" onClick={uploadVideo} disabled={uploading}>{uploading ? 'Đang tải...' : 'Tải video lên'}</button></div>{videoFile && <small>Đã chọn: <b>{videoFile.name}</b> · {(videoFile.size / 1024 / 1024).toFixed(1)} MB</small>}{uploadMessage && <div className="success" style={{marginTop:'12px'}}>{uploadMessage}</div>}{uploadError && <div className="success" style={{marginTop:'12px',color:'#b42318',background:'#fef3f2',borderColor:'#fecdca'}}>{uploadError}</div>}</div></div>
+    <div className="card admin-form"><div className="card-body"><h3>Thêm bài học</h3><div className="code-line"><input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Tên bài học mới"/><button className="primary" onClick={add}>Thêm</button></div></div></div>
+    <div className="admin-table">{items.map((x,i)=><div className="admin-row" key={x}><div><b>{String(i+1).padStart(2,'0')} · {x}</b><span>Toán học 11 · Chương 1</span></div><button className="outline" onClick={()=>alert('Bản 1.0: chức năng chỉnh sửa sẽ kết nối database sau.')}>Sửa</button></div>)}</div>
+  </main>;
 }
 
 function AdminDocs() {
