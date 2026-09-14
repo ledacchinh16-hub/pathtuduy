@@ -1,6 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
+import { createClient } from '@supabase/supabase-js';
 import './styles.css';
+
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
+);
 
 const courses = [
   { id: 1, title: 'Toán học 11 – Xuất phát sớm', teacher: 'Tổ Toán học', tag: '2K10', desc: 'Hệ thống bài giảng, chuyên đề và bài tập theo chương trình lớp 11.', lessons: 42, chapters: 5 },
@@ -90,26 +96,55 @@ function Lesson() {
 
 
 function AdminLogin({ onSuccess, onBack }) {
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  function handleLogin() {
-    if (password === 'PTD-ADMIN-2026') {
-      sessionStorage.setItem('ptd_admin', '1');
-      onSuccess();
-    } else {
-      setError('Mật khẩu quản trị chưa đúng.');
+  async function handleLogin() {
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail || !password) {
+      setError('Vui lòng nhập email và mật khẩu.');
+      return;
     }
+    setLoading(true);
+    setError('');
+    const { data, error: signInError } = await supabase.auth.signInWithPassword({
+      email: normalizedEmail,
+      password
+    });
+    if (signInError || !data.user) {
+      setLoading(false);
+      setError(signInError?.message === 'Invalid login credentials' ? 'Email hoặc mật khẩu chưa đúng.' : 'Không thể đăng nhập. Vui lòng thử lại.');
+      return;
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', data.user.id)
+      .single();
+
+    setLoading(false);
+    if (profileError || profile?.role !== 'admin') {
+      await supabase.auth.signOut();
+      setError('Tài khoản này không có quyền quản trị.');
+      return;
+    }
+
+    sessionStorage.setItem('ptd_admin', '1');
+    onSuccess();
   }
 
   return <main className="auth"><div className="auth-card">
     <div className="brand centered">PATHTUDUY</div>
     <div className="eyebrow">KHU VỰC QUẢN TRỊ</div>
     <h1>Đăng nhập quản trị</h1>
-    <p>Chỉ tài khoản quản trị mới được truy cập khu vực này.</p>
-    <input autoFocus value={password} onChange={e=>{setPassword(e.target.value);setError('')}} placeholder="Mật khẩu quản trị" type="password" onKeyDown={e=>e.key==='Enter' && handleLogin()} />
+    <p>Chỉ tài khoản có quyền <b>admin</b> mới được truy cập khu vực này.</p>
+    <input autoFocus value={email} onChange={e=>{setEmail(e.target.value);setError('')}} placeholder="Email quản trị" type="email" onKeyDown={e=>e.key==='Enter' && handleLogin()} />
+    <input value={password} onChange={e=>{setPassword(e.target.value);setError('')}} placeholder="Mật khẩu" type="password" onKeyDown={e=>e.key==='Enter' && handleLogin()} />
     {error && <div className="success" style={{color:'#b42318',background:'#fef3f2',borderColor:'#fecdca'}}>{error}</div>}
-    <button className="primary full" onClick={handleLogin}>Vào quản trị</button>
+    <button className="primary full" onClick={handleLogin} disabled={loading}>{loading ? 'Đang đăng nhập...' : 'Vào quản trị'}</button>
     <button className="ghost full" onClick={onBack}>Quay lại website</button>
   </div></main>;
 }
@@ -159,13 +194,53 @@ function AdminCodes() {
   return <main className="wrap page"><div className="page-title"><div><div className="eyebrow">QUẢN TRỊ · BẢO MẬT</div><h1>Mã truy cập</h1><p className="page-sub">Tạo mã mở khóa bài học.</p></div></div><div className="card admin-form"><div className="card-body"><h3>Tạo mã mới</h3><div className="code-line"><input value={code} onChange={e=>setCode(e.target.value)} placeholder="Ví dụ: PATH-2026-001"/><button className="primary" onClick={add}>Tạo mã</button></div></div></div><div className="admin-table">{items.map(x=><div className="admin-row" key={x.id}><div><b>{x.code}</b><span>{x.lesson} · {x.status}</span></div><button className="outline" onClick={()=>navigator.clipboard?.writeText(x.code)}>Sao chép</button></div>)}</div></main>;
 }
 
-function Login({ setPage }) { return <main className="auth"><div className="auth-card"><div className="brand centered">PATHTUDUY</div><h1>Đăng nhập</h1><p>Đăng nhập để học tập và theo dõi tiến độ.</p><input placeholder="Tên tài khoản / Email" /><input placeholder="Mật khẩu" type="password" /><button className="primary full" onClick={() => setPage('home')}>Đăng nhập</button><div className="auth-foot">Chưa có tài khoản? <b>Đăng ký</b></div></div></main>; }
+function Login({ setPage }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  async function handleLogin() {
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail || !password) {
+      setError('Vui lòng nhập email và mật khẩu.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
+    setLoading(false);
+    if (signInError) {
+      setError(signInError.message === 'Invalid login credentials' ? 'Email hoặc mật khẩu chưa đúng.' : 'Không thể đăng nhập. Vui lòng thử lại.');
+      return;
+    }
+    setPage('home');
+  }
+
+  return <main className="auth"><div className="auth-card"><div className="brand centered">PATHTUDUY</div><h1>Đăng nhập</h1><p>Đăng nhập để học tập và theo dõi tiến độ.</p><input value={email} onChange={e=>{setEmail(e.target.value);setError('')}} placeholder="Email" type="email" /><input value={password} onChange={e=>{setPassword(e.target.value);setError('')}} placeholder="Mật khẩu" type="password" /><button className="primary full" onClick={handleLogin} disabled={loading}>{loading ? 'Đang đăng nhập...' : 'Đăng nhập'}</button>{error && <div className="success" style={{color:'#b42318',background:'#fef3f2',borderColor:'#fecdca'}}>{error}</div>}<div className="auth-foot">Chưa có tài khoản? <b>Liên hệ quản trị viên để được cấp tài khoản.</b></div></div></main>;
+}
 
 function Footer() { return <footer><div className="wrap footer-grid"><div><div className="brand">PATHTUDUY</div><p>Nền tảng học tập của riêng bạn.</p></div><div><b>Khám phá</b><span>Khóa học</span><span>Tài liệu</span><span>Thi Online</span></div><div><b>Hỗ trợ</b><span>Điều khoản</span><span>Chính sách</span><span>Liên hệ</span></div></div></footer>; }
 
 function App() {
   const [page, setPage] = useState('home');
   const [adminUnlocked, setAdminUnlocked] = useState(() => sessionStorage.getItem('ptd_admin') === '1');
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      if (!data.session) {
+        sessionStorage.removeItem('ptd_admin');
+        setAdminUnlocked(false);
+      }
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || !session) {
+        sessionStorage.removeItem('ptd_admin');
+        setAdminUnlocked(false);
+      }
+    });
+    return () => listener.subscription.unsubscribe();
+  }, []);
 
   function goAdmin() {
     setPage(adminUnlocked ? 'admin' : 'adminLogin');
